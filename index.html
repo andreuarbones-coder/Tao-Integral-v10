@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Jardín OS v10 (React)</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href='data:application/manifest+json,{"name":"Jardín OS","short_name":"Jardín OS","start_url":".","display":"standalone","background_color":"#f0fdf4","theme_color":"#166534","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/1598/1598196.png","sizes":"192x192","type":"image/png"}]}'>
+
+    <!-- Estilos y Fuentes -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- React & Libraries (CDN) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Configuración Tailwind -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: '#166534', // green-800
+                        secondary: '#dcfce7', // green-100
+                        accent: '#22c55e', // green-500
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #f1f5f9; user-select: none; -webkit-tap-highlight-color: transparent; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); }
+        .slide-in { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        /* Loader */
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #166534; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, writeBatch, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        // --- FIREBASE SETUP ---
+        const manualConfig = { apiKey: "AIzaSyBzPiBCgiHoHSp24U7739fj9-htyTA8KiU", authDomain: "app-jardin-v4.firebaseapp.com", projectId: "app-jardin-v4", storageBucket: "app-jardin-v4.firebasestorage.app", messagingSenderId: "413324369604", appId: "1:413324369604:web:f78e3f459725dd824e3391" };
+        let firebaseConfig = manualConfig;
+        try { if (typeof __firebase_config !== 'undefined' && __firebase_config) firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+        const APP_ID = 'jardin-os-v10'; // Nueva versión, nueva colección base
+
+        // --- UTILS & SERVICES ---
+        const formatTime = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...';
+        const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '';
+
+        // --- COMPONENTS ---
+
+        // 1. UI COMPONENTS
+        const Button = ({ onClick, children, variant = 'primary', className = '', icon, disabled }) => {
+            const base = "px-4 py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2";
+            const variants = {
+                primary: "bg-green-800 text-white shadow-lg hover:bg-green-900",
+                secondary: "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50",
+                danger: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100",
+                ghost: "bg-transparent text-slate-400 hover:text-slate-600"
+            };
+            return (
+                <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    {icon && <i className={`fas ${icon}`}></i>}
+                    {children}
+                </button>
+            );
+        };
+
+        const Input = ({ label, ...props }) => (
+            <div className="mb-3">
+                {label && <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">{label}</label>}
+                <input {...props} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-green-500 transition-all font-medium text-slate-700 placeholder-slate-400" />
+            </div>
+        );
+
+        const Modal = ({ isOpen, onClose, title, children }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+                    <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden slide-in max-h-[90vh] flex flex-col">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-lg text-slate-800">{title}</h3>
+                            <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 hover:bg-red-100 hover:text-red-500 flex items-center justify-center transition-colors"><i className="fas fa-times"></i></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. FEATURE COMPONENTS
+
+        // --- TASKS ---
+        const TasksView = ({ user, branch }) => {
+            const [tasks, setTasks] = React.useState([]);
+            const [loading, setLoading] = React.useState(true);
+            const [isModalOpen, setModalOpen] = React.useState(false);
+            const [newTask, setNewTask] = React.useState({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
+
+            React.useEffect(() => {
+                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), orderBy('createdAt', 'desc'));
+                const unsub = onSnapshot(q, (snap) => {
+                    const data = snap.docs
+                        .map(d => ({id: d.id, ...d.data()}))
+                        .filter(t => t.branch === branch); // Filter client-side for simplicity in v10
+                    setTasks(data);
+                    setLoading(false);
+                });
+                return () => unsub();
+            }, [branch]);
+
+            const handleAdd = async () => {
+                if (!newTask.text.trim()) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), {
+                    ...newTask, branch, status: 'pending', createdAt: serverTimestamp()
+                });
+                setModalOpen(false);
+                setNewTask({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
+            };
+
+            const toggleStatus = async (task) => {
+                const nextStatus = task.status === 'pending' ? 'done' : 'pending';
+                await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', task.id), { status: nextStatus });
+            };
+
+            const deleteTask = async (id) => {
+                if(confirm("¿Borrar tarea?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', id));
+            }
+
+            const priorityColors = { critical: 'border-red-500', high: 'border-orange-500', medium: 'border-blue-500', low: 'border-green-500' };
+
+            return (
+                <div className="pb-24">
+                    {loading && <div className="flex justify-center p-8"><div className="loader"></div></div>}
+                    {!loading && tasks.length === 0 && (
+                        <div className="text-center p-10 opacity-50">
+                            <i className="fas fa-clipboard-check text-4xl mb-3"></i>
+                            <p>Todo limpio por hoy</p>
+                        </div>
+                    )}
+                    <div className="space-y-3">
+                        {tasks.map(t => (
+                            <div key={t.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${priorityColors[t.priority]} flex gap-3 transition-opacity ${t.status === 'done' ? 'opacity-50' : ''}`}>
+                                <div className="flex-grow">
+                                    <div className="flex justify-between items-start">
+                                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">{t.priority}</span>
+                                        <button onClick={() => deleteTask(t.id)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                    </div>
+                                    <h3 className={`font-medium text-slate-800 ${t.status === 'done' ? 'line-through' : ''}`}>{t.text}</h3>
+                                    <p className="text-xs text-slate-400 mt-1"><i className="fas fa-user-circle mr-1"></i> {t.assignee}</p>
+                                </div>
+                                <button onClick={() => toggleStatus(t)} className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all active:scale-90 ${t.status === 'done' ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-300'}`}>
+                                    <i className="fas fa-check"></i>
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="fixed bottom-6 right-6">
+                        <Button onClick={() => setModalOpen(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-green-700" icon="fa-plus"></Button>
+                    </div>
+
+                    <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Nueva Tarea">
+                        <Input placeholder="Descripción..." value={newTask.text} onChange={e => setNewTask({...newTask, text: e.target.value})} autoFocus />
+                        <div className="grid grid-cols-2 gap-3 mb-3">
+                            <Input placeholder="Responsable" value={newTask.assignee} onChange={e => setNewTask({...newTask, assignee: e.target.value})} />
+                            <div className="mb-3">
+                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Prioridad</label>
+                                <select value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-600">
+                                    <option value="low">Baja</option>
+                                    <option value="medium">Normal</option>
+                                    <option value="high">Alta</option>
+                                    <option value="critical">URGENTE</option>
+                                </select>
+                            </div>
+                        </div>
+                        <Button onClick={handleAdd} className="w-full">Guardar Tarea</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        // --- STOCK (Mejorado con PapaParse y filtrado en memoria) ---
+        const StockView = () => {
+            const [items, setItems] = React.useState([]);
+            const [filter, setFilter] = React.useState('');
+            const [loading, setLoading] = React.useState(true);
+            const fileInputRef = React.useRef(null);
+
+            React.useEffect(() => {
+                // Solo traemos los nombres y IDs para ser ligeros
+                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock'));
+                const unsub = onSnapshot(q, (snap) => {
+                    const list = snap.docs.map(d => ({id: d.id, name: d.data().name}));
+                    setItems(list.sort((a,b) => a.name.localeCompare(b.name)));
+                    setLoading(false);
+                });
+                return () => unsub();
+            }, []);
+
+            // Filtrado eficiente con useMemo
+            const filteredItems = React.useMemo(() => {
+                if (!filter) return items.slice(0, 50); // Mostrar solo primeros 50 si no hay filtro
+                const lower = filter.toLowerCase();
+                return items.filter(i => i.name.toLowerCase().includes(lower)).slice(0, 50); // Límite duro de renderizado
+            }, [items, filter]);
+
+            const handleImport = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                Papa.parse(file, {
+                    complete: async (results) => {
+                        if (results.data && results.data.length > 0) {
+                            if(!confirm(`Se encontraron ${results.data.length} filas. ¿Importar?`)) return;
+                            setLoading(true);
+                            
+                            // Detectar columna de descripción (asumimos la que tiene más texto o índice 1)
+                            const batchSize = 400;
+                            const chunks = [];
+                            let currentChunk = writeBatch(db);
+                            let count = 0;
+                            
+                            // Limpiar colección anterior (opcional, pero recomendado para resets)
+                            // En v10 solo agregamos por simplicidad
+                            
+                            results.data.forEach((row, idx) => {
+                                if (idx === 0) return; // Skip header
+                                // Lógica simple: Tomar la celda más larga o la segunda columna
+                                const name = row[1] || row[0]; 
+                                if (name && typeof name === 'string' && name.length > 2) {
+                                    const ref = doc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock'));
+                                    currentChunk.set(ref, { name: name.trim(), createdAt: serverTimestamp() });
+                                    count++;
+                                    if (count % batchSize === 0) {
+                                        chunks.push(currentChunk);
+                                        currentChunk = writeBatch(db);
+                                    }
+                                }
+                            });
+                            chunks.push(currentChunk);
+                            
+                            await Promise.all(chunks.map(b => b.commit()));
+                            alert("Importación completada");
+                            setLoading(false);
+                        }
+                    },
+                    header: false
+                });
+            };
+
+            const clearStock = async () => {
+                 if(!confirm("PELIGRO: Esto borrará todo el inventario. ¿Seguro?")) return;
+                 // Nota: Borrar una colección entera desde cliente es costoso. 
+                 // Aquí solo mostramos la intención. En producción usar Cloud Functions.
+                 alert("Función deshabilitada por seguridad en esta demo. Usa la consola de Firebase.");
+            };
+
+            return (
+                <div className="pb-24">
+                    <div className="sticky top-0 bg-slate-100 z-10 pb-4 pt-2">
+                        <div className="relative">
+                            <i className="fas fa-search absolute left-4 top-3.5 text-slate-400"></i>
+                            <input 
+                                type="text" 
+                                placeholder="Buscar en inventario..." 
+                                className="w-full p-3 pl-10 rounded-xl border border-slate-300 shadow-sm outline-none focus:ring-2 focus:ring-green-500"
+                                value={filter}
+                                onChange={e => setFilter(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden divide-y divide-slate-100">
+                        {loading && <div className="p-4 text-center text-slate-400">Cargando...</div>}
+                        {!loading && filteredItems.length === 0 && <div className="p-8 text-center text-slate-400">Sin resultados</div>}
+                        {filteredItems.map(item => (
+                            <div key={item.id} className="p-3 text-sm text-slate-700 hover:bg-slate-50">
+                                {item.name}
+                            </div>
+                        ))}
+                        {!filter && items.length > 50 && (
+                            <div className="p-3 text-center text-xs text-slate-400 bg-slate-50 italic">
+                                ... y {items.length - 50} productos más. Usa el buscador.
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-8 space-y-3">
+                        <input type="file" ref={fileInputRef} accept=".csv" className="hidden" onChange={handleImport} />
+                        <Button variant="secondary" className="w-full" onClick={() => fileInputRef.current.click()} icon="fa-file-csv">
+                            Importar CSV (Sobreescribir)
+                        </Button>
+                        <Button variant="ghost" className="w-full text-red-400" onClick={clearStock} icon="fa-trash">
+                            Borrar Inventario
+                        </Button>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- CHAT (Radio) ---
+        const ChatView = ({ user, branch }) => {
+            const [msgs, setMsgs] = React.useState([]);
+            const [text, setText] = React.useState('');
+            const dummy = React.useRef();
+
+            React.useEffect(() => {
+                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), orderBy('createdAt', 'asc'), limit(100));
+                const unsub = onSnapshot(q, (snap) => {
+                    const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                    setMsgs(data);
+                    setTimeout(() => dummy.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                });
+                return () => unsub();
+            }, []);
+
+            const send = async (e) => {
+                e.preventDefault();
+                if (!text.trim()) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), {
+                    text,
+                    senderId: user.uid,
+                    senderName: user.displayName || 'Anon',
+                    branch,
+                    type: 'text',
+                    createdAt: serverTimestamp()
+                });
+                setText('');
+            };
+
+            return (
+                <div className="flex flex-col h-[calc(100vh-140px)]">
+                    <div className="flex-grow overflow-y-auto p-4 space-y-3">
+                        {msgs.map(m => {
+                            const isMe = m.senderId === user.uid;
+                            return (
+                                <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${isMe ? 'bg-green-100 text-green-900 rounded-br-none' : 'bg-white border border-slate-200 text-slate-700 rounded-bl-none'}`}>
+                                        {!isMe && <div className="text-[10px] font-bold text-green-600 mb-1">{m.senderName} ({m.branch})</div>}
+                                        {m.text}
+                                    </div>
+                                    <span className="text-[10px] text-slate-300 mt-1 px-1">{formatTime(m.createdAt)}</span>
+                                </div>
+                            )
+                        })}
+                        <div ref={dummy}></div>
+                    </div>
+                    <form onSubmit={send} className="p-3 bg-white border-t border-slate-200 flex gap-2">
+                        <input className="flex-grow bg-slate-100 rounded-full px-4 py-2 outline-none" value={text} onChange={e => setText(e.target.value)} placeholder="Mensaje..." />
+                        <button type="submit" className="w-10 h-10 rounded-full bg-green-600 text-white shadow-md active:scale-95"><i className="fas fa-paper-plane"></i></button>
+                    </form>
+                </div>
+            );
+        };
+
+        // --- APP SHELL (Main Logic) ---
+        const App = () => {
+            const [user, setUser] = React.useState(null);
+            const [view, setView] = React.useState('tasks');
+            const [branch, setBranch] = React.useState(localStorage.getItem('tao_branch') || 'centro');
+            const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+            React.useEffect(() => {
+                const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+                return () => unsub();
+            }, []);
+
+            const login = async () => {
+                try {
+                    await signInWithPopup(auth, new GoogleAuthProvider());
+                } catch (e) {
+                    console.error(e);
+                    // Fallback para demo
+                    await signInAnonymously(auth);
+                }
+            };
+
+            const toggleBranch = () => {
+                const next = branch === 'centro' ? 'ejemplares' : 'centro';
+                setBranch(next);
+                localStorage.setItem('tao_branch', next);
+                setSidebarOpen(false);
+            };
+
+            if (!user) {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white">
+                        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 text-3xl animate-pulse">
+                            <i className="fas fa-seedling"></i>
+                        </div>
+                        <h1 className="text-3xl font-bold mb-2">Jardín OS v10</h1>
+                        <p className="text-slate-400 mb-8 text-center max-w-xs">Sistema Integral de Gestión de Vivero. Versión React.</p>
+                        <Button onClick={login} className="w-full max-w-xs bg-white text-slate-900 hover:bg-slate-100">
+                            <i className="fab fa-google text-red-500"></i> Acceder con Google
+                        </Button>
+                        <p className="mt-4 text-xs text-slate-600">Al continuar aceptas el uso del servicio interno.</p>
+                    </div>
+                );
+            }
+
+            const NavItem = ({ id, icon, label, badge }) => (
+                <button onClick={() => { setView(id); setSidebarOpen(false); }} className={`w-full text-left px-6 py-3 flex items-center gap-4 font-medium transition-colors ${view === id ? 'bg-green-50 text-green-800 border-l-4 border-green-600' : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'}`}>
+                    <i className={`fas ${icon} w-5 ${view === id ? 'text-green-600' : 'text-slate-400'}`}></i>
+                    {label}
+                    {badge && <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 rounded-full">{badge}</span>}
+                </button>
+            );
+
+            return (
+                <div className="h-[100dvh] flex flex-col overflow-hidden bg-slate-100 text-slate-800 font-sans">
+                    
+                    {/* Header */}
+                    <header className={`h-16 flex items-center justify-between px-4 text-white shadow-md z-20 transition-colors duration-500 ${branch === 'centro' ? 'bg-green-800' : 'bg-indigo-900'}`}>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setSidebarOpen(true)}><i className="fas fa-bars text-xl"></i></button>
+                            <h1 className="font-bold text-lg capitalize">{view === 'stock' ? 'Inventario' : view === 'chat' ? 'Radio Frecuencia' : 'Mis Tareas'}</h1>
+                        </div>
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs border border-white/30">
+                            {user.photoURL ? <img src={user.photoURL} className="w-full h-full rounded-full" /> : (user.displayName?.[0] || 'U')}
+                        </div>
+                    </header>
+
+                    {/* Sidebar */}
+                    {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)}></div>}
+                    <aside className={`fixed top-0 left-0 h-full w-72 bg-white z-50 shadow-2xl transition-transform duration-300 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                        <div className={`p-6 text-white ${branch === 'centro' ? 'bg-green-800' : 'bg-indigo-900'}`}>
+                            <div className="flex items-center gap-3 mb-4">
+                                <i className="fas fa-seedling text-2xl"></i>
+                                <div>
+                                    <h2 className="font-bold text-lg leading-none">Jardín OS</h2>
+                                    <span className="text-xs opacity-70">v10.0 React Native-Like</span>
+                                </div>
+                            </div>
+                            <button onClick={toggleBranch} className="w-full bg-black/20 p-2 rounded-lg flex items-center justify-between hover:bg-black/30 text-sm font-bold border border-white/10">
+                                <span>{branch === 'centro' ? 'Centro Tao' : 'Ejemplares Tao'}</span>
+                                <i className="fas fa-exchange-alt opacity-70"></i>
+                            </button>
+                        </div>
+                        <nav className="flex-grow py-4 overflow-y-auto">
+                            <NavItem id="tasks" icon="fa-tasks" label="Tareas" />
+                            <NavItem id="stock" icon="fa-boxes" label="Stock & CSV" />
+                            <NavItem id="chat" icon="fa-walkie-talkie" label="Radio Chat" />
+                        </nav>
+                        <div className="p-4 border-t border-slate-100">
+                             <button onClick={() => signOut(auth)} className="w-full py-2 text-slate-500 text-sm font-bold hover:text-red-500 flex items-center justify-center gap-2">
+                                <i className="fas fa-sign-out-alt"></i> Cerrar Sesión
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-grow overflow-y-auto p-4 relative">
+                        {view === 'tasks' && <TasksView user={user} branch={branch} />}
+                        {view === 'stock' && <StockView />}
+                        {view === 'chat' && <ChatView user={user} branch={branch} />}
+                    </main>
+
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
