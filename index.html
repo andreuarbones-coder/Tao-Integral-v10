@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Jardín OS v10.5</title>
+    <title>Jardín OS v10.6</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"Jardín OS","short_name":"Jardín OS","start_url":".","display":"standalone","background_color":"#f0fdf4","theme_color":"#166534","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/1598/1598196.png","sizes":"192x192","type":"image/png"}]}'>
@@ -51,7 +51,7 @@
     <script type="text/babel" data-type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, writeBatch, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, writeBatch, limit, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         // --- FIREBASE CONFIG ---
@@ -119,16 +119,32 @@
             </div>
         );
 
-        // --- HELPER PARA ITEMS DINÁMICOS (Pedidos/Repartos) ---
+        const PermissionErrorBanner = () => (
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4 rounded-r shadow-md mx-4 mt-4">
+                <div className="flex items-start">
+                    <div className="flex-shrink-0"><i className="fas fa-exclamation-triangle text-red-500"></i></div>
+                    <div className="ml-3">
+                        <h3 className="text-sm font-bold text-red-800">Error de Permisos (Firestore Rules)</h3>
+                        <p className="text-xs text-red-700 mt-1">Tu base de datos está bloqueando la conexión. Ve a tu <strong>Firebase Console &gt; Firestore Database &gt; Reglas</strong> y pega esto:</p>
+                        <pre className="mt-2 bg-red-100 p-2 rounded text-[10px] font-mono text-red-900 overflow-x-auto">
+{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /artifacts/{appId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`}
+                        </pre>
+                    </div>
+                </div>
+            </div>
+        );
+
         const ItemsInput = ({ items, setItems }) => {
             const add = () => setItems([...items, { item: '', amount: '' }]);
             const remove = (idx) => setItems(items.filter((_, i) => i !== idx));
-            const update = (idx, field, val) => {
-                const copy = [...items];
-                copy[idx][field] = val;
-                setItems(copy);
-            };
-
+            const update = (idx, field, val) => { const copy = [...items]; copy[idx][field] = val; setItems(copy); };
             return (
                 <div className="space-y-2 mb-4">
                     <label className="block text-xs font-bold text-slate-400 uppercase ml-1">Items</label>
@@ -146,7 +162,7 @@
 
         // --- VISTAS DEL NEGOCIO ---
 
-        const DeliveriesView = ({ user, branch }) => {
+        const DeliveriesView = ({ user, branch, onError }) => {
             const [list, setList] = React.useState([]);
             const [modal, setModal] = React.useState(false);
             const [form, setForm] = React.useState({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] });
@@ -154,22 +170,25 @@
 
             React.useEffect(() => {
                 const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries'), orderBy('createdAt', 'desc'), limit(50));
-                return onSnapshot(q, snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+                return onSnapshot(q, 
+                    snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))),
+                    err => { console.error("Deliveries Error:", err); if(onError) onError(err); }
+                );
             }, []);
 
             const save = async () => {
                 const validItems = form.items.filter(i => i.item.trim());
                 if(!form.client || validItems.length === 0) return alert("Faltan datos");
-                const payload = { ...form, items: validItems, updatedAt: serverTimestamp(), branchOrigin: branch };
-                
-                if (editId) await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', editId), payload);
-                else await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries'), { ...payload, status: 'pending', createdAt: serverTimestamp() });
-                
-                setModal(false); setEditId(null); setForm({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] });
+                try {
+                    const payload = { ...form, items: validItems, updatedAt: serverTimestamp(), branchOrigin: branch };
+                    if (editId) await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', editId), payload);
+                    else await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries'), { ...payload, status: 'pending', createdAt: serverTimestamp() });
+                    setModal(false); setEditId(null); setForm({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] });
+                } catch(e) { console.error(e); alert("Error al guardar: " + e.message); }
             };
 
-            const updateStatus = async (id, status) => await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id), { status });
-            const remove = async (id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id)); };
+            const updateStatus = async (id, status) => { try { await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id), { status }); } catch(e) { console.error(e); } };
+            const remove = async (id) => { if(confirm("¿Eliminar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id)); } catch(e) { console.error(e); } };
             const edit = (d) => { setForm({...d, items: Array.isArray(d.items) ? d.items : [{item: d.items, amount: '1'}]}); setEditId(d.id); setModal(true); };
 
             return (
@@ -228,29 +247,34 @@
             );
         };
 
-        const OrdersView = ({ user, branch }) => {
+        const OrdersView = ({ user, branch, onError }) => {
             const [list, setList] = React.useState([]);
             const [modal, setModal] = React.useState(false);
             const [form, setForm] = React.useState({ requester: user.displayName || '', notes: '', items: [{item: '', amount: ''}] });
 
             React.useEffect(() => {
                 const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), orderBy('createdAt', 'desc'), limit(50));
-                return onSnapshot(q, snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+                return onSnapshot(q, 
+                    snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))),
+                    err => { console.error("Orders Error:", err); if(onError) onError(err); }
+                );
             }, []);
 
             const save = async () => {
                 const valid = form.items.filter(i => i.item.trim());
                 if(valid.length === 0) return alert("Agrega items");
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), { ...form, items: valid, status: 'pending', branch, createdAt: serverTimestamp() });
-                setModal(false); setForm({ requester: user.displayName || '', notes: '', items: [{item: '', amount: ''}] });
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), { ...form, items: valid, status: 'pending', branch, createdAt: serverTimestamp() });
+                    setModal(false); setForm({ requester: user.displayName || '', notes: '', items: [{item: '', amount: ''}] });
+                } catch(e) { console.error(e); alert(e.message); }
             };
 
             const advance = async (o) => {
                 const next = o.status === 'pending' ? 'ordered' : 'received';
-                await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', o.id), { status: next });
+                try { await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', o.id), { status: next }); } catch(e) { console.error(e); }
             };
 
-            const deleteOrder = async(id) => { if(confirm("¿Borrar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', id)); };
+            const deleteOrder = async(id) => { if(confirm("¿Borrar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', id)); } catch(e) { console.error(e); } };
 
             return (
                 <div className="pb-24 space-y-3">
@@ -285,7 +309,7 @@
             );
         };
 
-        const StandardsView = ({ user }) => {
+        const StandardsView = ({ user, onError }) => {
             const [list, setList] = React.useState([]);
             const [filter, setFilter] = React.useState('');
             const [modal, setModal] = React.useState(false);
@@ -294,17 +318,19 @@
             const [uploading, setUploading] = React.useState(false);
 
             React.useEffect(() => {
-                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards')), snap => {
-                    const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                    // Group by Species
-                    const grouped = {};
-                    data.forEach(item => {
-                        const s = item.species.toLowerCase();
-                        if(!grouped[s]) grouped[s] = { name: item.species, variants: [] };
-                        grouped[s].variants.push(item);
-                    });
-                    setList(Object.values(grouped).sort((a,b) => a.name.localeCompare(b.name)));
-                });
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards')), 
+                    snap => {
+                        const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                        const grouped = {};
+                        data.forEach(item => {
+                            const s = item.species ? item.species.toLowerCase() : 'sin-nombre';
+                            if(!grouped[s]) grouped[s] = { name: item.species || 'Sin Nombre', variants: [] };
+                            grouped[s].variants.push(item);
+                        });
+                        setList(Object.values(grouped).sort((a,b) => a.name.localeCompare(b.name)));
+                    },
+                    err => { console.error("Standards Error:", err); if(onError) onError(err); }
+                );
             }, []);
 
             const save = async () => {
@@ -316,19 +342,21 @@
                         const sRef = ref(storage, `standards/${Date.now()}_${file.name}`);
                         const snap = await uploadBytes(sRef, file);
                         photoUrl = await getDownloadURL(snap.ref);
-                    } catch(e) { console.error(e); alert("Error subiendo foto"); setUploading(false); return; }
+                    } catch(e) { console.error(e); alert("Error subiendo foto (revisa permisos de Storage)"); setUploading(false); return; }
                 }
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards'), { 
-                    ...form, 
-                    species: form.species.charAt(0).toUpperCase() + form.species.slice(1), 
-                    photoUrl, 
-                    author: user.displayName, 
-                    createdAt: serverTimestamp() 
-                });
-                setUploading(false); setModal(false); setFile(null); setForm({ species: '', sizeLabel: 'T1', height: '', diameter: '' });
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards'), { 
+                        ...form, 
+                        species: form.species.charAt(0).toUpperCase() + form.species.slice(1), 
+                        photoUrl, 
+                        author: user.displayName, 
+                        createdAt: serverTimestamp() 
+                    });
+                    setUploading(false); setModal(false); setFile(null); setForm({ species: '', sizeLabel: 'T1', height: '', diameter: '' });
+                } catch(e) { console.error(e); alert(e.message); setUploading(false); }
             };
 
-            const delItem = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'standards', id)); };
+            const delItem = async(id) => { if(confirm("¿Eliminar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'standards', id)); } catch(e) { console.error(e); } };
 
             return (
                 <div className="pb-24">
@@ -377,12 +405,10 @@
         const StandardCard = ({ group, onDelete }) => {
             const [selected, setSelected] = React.useState(group.variants[0]);
             
-            // Re-select if variants change
             React.useEffect(() => {
                 if(!group.variants.find(v => v.id === selected.id)) setSelected(group.variants[0]);
             }, [group.variants]);
 
-            // Sort variants T1 < T2...
             const variants = group.variants.sort((a,b) => a.sizeLabel.localeCompare(b.sizeLabel));
 
             return (
@@ -415,24 +441,27 @@
             );
         };
 
-        const NotesView = ({ branch }) => {
+        const NotesView = ({ branch, onError }) => {
             const [notes, setNotes] = React.useState([]);
             const [modal, setModal] = React.useState(false);
             const [content, setContent] = React.useState('');
             const [type, setType] = React.useState('normal');
 
             React.useEffect(() => {
-                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), where('branch', '==', branch)), snap => {
-                    setNotes(snap.docs.map(d => ({id: d.id, ...d.data()})));
-                });
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), where('branch', '==', branch)), 
+                    snap => setNotes(snap.docs.map(d => ({id: d.id, ...d.data()}))),
+                    err => { console.error("Notes Error:", err); if(onError) onError(err); }
+                );
             }, [branch]);
 
             const save = async () => {
                 if(!content.trim()) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), { content, type, branch, createdAt: serverTimestamp() });
-                setModal(false); setContent('');
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), { content, type, branch, createdAt: serverTimestamp() });
+                    setModal(false); setContent('');
+                } catch(e) { console.error(e); alert(e.message); }
             };
-            const remove = async(id) => await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'notes', id));
+            const remove = async(id) => { if(confirm("¿Eliminar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'notes', id)); } catch(e) { console.error(e); } };
 
             return (
                 <div className="pb-24 grid gap-4">
@@ -453,19 +482,24 @@
             );
         };
 
-        const ProceduresView = () => {
+        const ProceduresView = ({ onError }) => {
             const [list, setList] = React.useState([]);
             const [modal, setModal] = React.useState(false);
             const [form, setForm] = React.useState({ title: '', steps: '', color: 'blue' });
 
-            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures')), snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()})))), []);
+            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures')), 
+                snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))),
+                err => { console.error("Procedures Error:", err); if(onError) onError(err); }
+            ), []);
 
             const save = async () => {
                 if(!form.title) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures'), { ...form, createdAt: serverTimestamp() });
-                setModal(false); setForm({ title: '', steps: '', color: 'blue' });
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures'), { ...form, createdAt: serverTimestamp() });
+                    setModal(false); setForm({ title: '', steps: '', color: 'blue' });
+                } catch(e) { console.error(e); alert(e.message); }
             };
-            const remove = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'procedures', id)); };
+            const remove = async(id) => { if(confirm("¿Eliminar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'procedures', id)); } catch(e) { console.error(e); } };
 
             const colors = { blue: 'bg-blue-50 border-blue-200 text-blue-900', green: 'bg-emerald-50 border-emerald-200 text-emerald-900', red: 'bg-red-50 border-red-200 text-red-900', purple: 'bg-purple-50 border-purple-200 text-purple-900' };
 
@@ -493,20 +527,25 @@
             );
         };
 
-        const ScriptsView = () => {
+        const ScriptsView = ({ onError }) => {
             const [list, setList] = React.useState([]);
             const [modal, setModal] = React.useState(false);
             const [form, setForm] = React.useState({ title: '', content: '' });
 
-            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts')), snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()})))), []);
+            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts')), 
+                snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))),
+                err => { console.error("Scripts Error:", err); if(onError) onError(err); }
+            ), []);
 
             const save = async () => {
                 if(!form.title) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts'), { ...form, createdAt: serverTimestamp() });
-                setModal(false); setForm({ title: '', content: '' });
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts'), { ...form, createdAt: serverTimestamp() });
+                    setModal(false); setForm({ title: '', content: '' });
+                } catch(e) { console.error(e); alert(e.message); }
             };
             const copy = (txt) => { navigator.clipboard.writeText(txt); alert("Copiado!"); };
-            const remove = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'scripts', id)); };
+            const remove = async(id) => { if(confirm("¿Eliminar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'scripts', id)); } catch(e) { console.error(e); } };
 
             return (
                 <div className="pb-24 space-y-4">
@@ -530,8 +569,7 @@
             );
         };
 
-        // --- COMPONENTS FROM V10 (Tasks, Stock, Chat) reused here ---
-        const TasksView = ({ user, branch }) => {
+        const TasksView = ({ user, branch, onError }) => {
             const [tasks, setTasks] = React.useState([]);
             const [loading, setLoading] = React.useState(true);
             const [isModalOpen, setModalOpen] = React.useState(false);
@@ -542,16 +580,18 @@
                 return onSnapshot(q, (snap) => {
                     const data = snap.docs.map(d => ({id: d.id, ...d.data()})).filter(t => t.branch === branch);
                     setTasks(data); setLoading(false);
-                });
+                }, err => { console.error("Tasks Error:", err); if(onError) onError(err); });
             }, [branch]);
 
             const handleAdd = async () => {
                 if (!newTask.text.trim()) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), { ...newTask, branch, status: 'pending', createdAt: serverTimestamp() });
-                setModalOpen(false); setNewTask({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), { ...newTask, branch, status: 'pending', createdAt: serverTimestamp() });
+                    setModalOpen(false); setNewTask({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
+                } catch(e) { console.error(e); alert(e.message); }
             };
-            const toggle = async (t) => await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', t.id), { status: t.status === 'pending' ? 'done' : 'pending' });
-            const del = async (id) => { if(confirm("¿Borrar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', id)); };
+            const toggle = async (t) => { try { await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', t.id), { status: t.status === 'pending' ? 'done' : 'pending' }); } catch(e) { console.error(e); } };
+            const del = async (id) => { if(confirm("¿Borrar?")) try { await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', id)); } catch(e) { console.error(e); } };
 
             const prio = { critical: 'border-red-500', high: 'border-orange-500', medium: 'border-blue-500', low: 'border-green-500' };
 
@@ -583,15 +623,18 @@
             );
         };
 
-        const StockView = () => {
+        const StockView = ({ onError }) => {
             const [items, setItems] = React.useState([]);
             const [filter, setFilter] = React.useState('');
             const fileRef = React.useRef(null);
 
             React.useEffect(() => {
-                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock')), snap => {
-                    setItems(snap.docs.map(d => ({id: d.id, name: d.data().name})).sort((a,b) => a.name.localeCompare(b.name)));
-                });
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock')), 
+                    snap => {
+                        setItems(snap.docs.map(d => ({id: d.id, name: d.data().name})).sort((a,b) => a.name.localeCompare(b.name)));
+                    },
+                    err => { console.error("Stock Error:", err); if(onError) onError(err); }
+                );
             }, []);
 
             const filtered = React.useMemo(() => {
@@ -615,8 +658,7 @@
                                 }
                             });
                             chunks.push(chunk);
-                            await Promise.all(chunks.map(b => b.commit()));
-                            alert("Importado!");
+                            try { await Promise.all(chunks.map(b => b.commit())); alert("Importado!"); } catch(e) { console.error(e); alert(e.message); }
                         }
                     }, header: false
                 });
@@ -639,21 +681,26 @@
             );
         };
 
-        const ChatView = ({ user, branch }) => {
+        const ChatView = ({ user, branch, onError }) => {
             const [msgs, setMsgs] = React.useState([]);
             const [text, setText] = React.useState('');
             const dummy = React.useRef();
             React.useEffect(() => {
                 const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), orderBy('createdAt', 'asc'), limit(100));
-                return onSnapshot(q, snap => {
-                    setMsgs(snap.docs.map(d => ({id: d.id, ...d.data()})));
-                    setTimeout(() => dummy.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-                });
+                return onSnapshot(q, 
+                    snap => {
+                        setMsgs(snap.docs.map(d => ({id: d.id, ...d.data()})));
+                        setTimeout(() => dummy.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+                    },
+                    err => { console.error("Chat Error:", err); if(onError) onError(err); }
+                );
             }, []);
             const send = async (e) => {
                 e.preventDefault(); if (!text.trim()) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), { text, senderId: user.uid, senderName: user.displayName||'Anon', branch, type: 'text', createdAt: serverTimestamp() });
-                setText('');
+                try {
+                    await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), { text, senderId: user.uid, senderName: user.displayName||'Anon', branch, type: 'text', createdAt: serverTimestamp() });
+                    setText('');
+                } catch(e) { console.error(e); alert(e.message); }
             };
             return (
                 <div className="flex flex-col h-[calc(100vh-140px)]">
@@ -683,12 +730,27 @@
             const [view, setView] = React.useState('tasks');
             const [branch, setBranch] = React.useState(localStorage.getItem('tao_branch') || 'centro');
             const [sidebarOpen, setSidebarOpen] = React.useState(false);
+            const [permError, setPermError] = React.useState(false);
 
             React.useEffect(() => onAuthStateChanged(auth, u => setUser(u)), []);
-            const login = async () => { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch(e) { await signInAnonymously(auth); } };
+            
+            const login = async () => { 
+                try { 
+                    await signInWithPopup(auth, new GoogleAuthProvider()); 
+                } catch(e) { 
+                    // Fallback a anónimo si falla el popup (común en iframes)
+                    await signInAnonymously(auth); 
+                } 
+            };
             const toggleBranch = () => { const next = branch === 'centro' ? 'ejemplares' : 'centro'; setBranch(next); localStorage.setItem('tao_branch', next); setSidebarOpen(false); };
 
-            if (!user) return <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white"><div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 text-3xl animate-pulse"><i className="fas fa-seedling"></i></div><h1 className="text-3xl font-bold mb-2">Jardín OS v10.5</h1><Button onClick={login} className="w-full max-w-xs bg-white text-slate-900 hover:bg-slate-100"><i className="fab fa-google text-red-500"></i> Acceder</Button></div>;
+            const handleFirestoreError = (err) => {
+                if (err.code === 'permission-denied') {
+                    setPermError(true);
+                }
+            };
+
+            if (!user) return <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white"><div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 text-3xl animate-pulse"><i className="fas fa-seedling"></i></div><h1 className="text-3xl font-bold mb-2">Jardín OS v10.6</h1><Button onClick={login} className="w-full max-w-xs bg-white text-slate-900 hover:bg-slate-100"><i className="fab fa-google text-red-500"></i> Acceder</Button></div>;
 
             const NavItem = ({ id, icon, label, badge }) => (
                 <button onClick={() => { setView(id); setSidebarOpen(false); }} className={`w-full text-left px-6 py-3 flex items-center gap-4 font-medium transition-colors ${view === id ? 'bg-green-50 text-green-800 border-l-4 border-green-600' : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'}`}>
@@ -709,7 +771,7 @@
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)}></div>}
                     <aside className={`fixed top-0 left-0 h-full w-72 bg-white z-50 shadow-2xl transition-transform duration-300 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                         <div className={`p-6 text-white ${branch === 'centro' ? 'bg-green-800' : 'bg-indigo-900'}`}>
-                            <div className="flex items-center gap-3 mb-4"><i className="fas fa-seedling text-2xl"></i><div><h2 className="font-bold text-lg leading-none">Jardín OS</h2><span className="text-xs opacity-70">v10.5 Completa</span></div></div>
+                            <div className="flex items-center gap-3 mb-4"><i className="fas fa-seedling text-2xl"></i><div><h2 className="font-bold text-lg leading-none">Jardín OS</h2><span className="text-xs opacity-70">v10.6 Completa</span></div></div>
                             <button onClick={toggleBranch} className="w-full bg-black/20 p-2 rounded-lg flex items-center justify-between hover:bg-black/30 text-sm font-bold border border-white/10"><span>{branch === 'centro' ? 'Centro Tao' : 'Ejemplares Tao'}</span><i className="fas fa-exchange-alt opacity-70"></i></button>
                         </div>
                         <nav className="flex-grow py-4 overflow-y-auto">
@@ -726,16 +788,20 @@
                         <div className="p-4 border-t border-slate-100"><button onClick={() => signOut(auth)} className="w-full py-2 text-slate-500 text-sm font-bold hover:text-red-500 flex items-center justify-center gap-2"><i className="fas fa-sign-out-alt"></i> Cerrar Sesión</button></div>
                     </aside>
 
-                    <main className="flex-grow overflow-y-auto p-4 relative">
-                        {view === 'tasks' && <TasksView user={user} branch={branch} />}
-                        {view === 'orders' && <OrdersView user={user} branch={branch} />}
-                        {view === 'delivery' && <DeliveriesView user={user} branch={branch} />}
-                        {view === 'standards' && <StandardsView user={user} />}
-                        {view === 'stock' && <StockView />}
-                        {view === 'procedures' && <ProceduresView />}
-                        {view === 'scripts' && <ScriptsView />}
-                        {view === 'notes' && <NotesView branch={branch} />}
-                        {view === 'chat' && <ChatView user={user} branch={branch} />}
+                    <main className="flex-grow overflow-y-auto relative">
+                        {permError && <PermissionErrorBanner />}
+                        
+                        <div className="p-4">
+                            {view === 'tasks' && <TasksView user={user} branch={branch} onError={handleFirestoreError} />}
+                            {view === 'orders' && <OrdersView user={user} branch={branch} onError={handleFirestoreError} />}
+                            {view === 'delivery' && <DeliveriesView user={user} branch={branch} onError={handleFirestoreError} />}
+                            {view === 'standards' && <StandardsView user={user} onError={handleFirestoreError} />}
+                            {view === 'stock' && <StockView onError={handleFirestoreError} />}
+                            {view === 'procedures' && <ProceduresView onError={handleFirestoreError} />}
+                            {view === 'scripts' && <ScriptsView onError={handleFirestoreError} />}
+                            {view === 'notes' && <NotesView branch={branch} onError={handleFirestoreError} />}
+                            {view === 'chat' && <ChatView user={user} branch={branch} onError={handleFirestoreError} />}
+                        </div>
                     </main>
                 </div>
             );
