@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Jardín OS v10 (React)</title>
+    <title>Jardín OS v10.5</title>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href='data:application/manifest+json,{"name":"Jardín OS","short_name":"Jardín OS","start_url":".","display":"standalone","background_color":"#f0fdf4","theme_color":"#166534","icons":[{"src":"https://cdn-icons-png.flaticon.com/512/1598/1598196.png","sizes":"192x192","type":"image/png"}]}'>
@@ -26,9 +26,8 @@
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
-                        primary: '#166534', // green-800
-                        secondary: '#dcfce7', // green-100
-                        accent: '#22c55e', // green-500
+                        primary: '#166534', 
+                        secondary: '#dcfce7',
                     }
                 }
             }
@@ -38,9 +37,9 @@
         body { background-color: #f1f5f9; user-select: none; -webkit-tap-highlight-color: transparent; }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(8px); }
         .slide-in { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes slideIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @media (min-width: 640px) { @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } } }
         /* Loader */
         .loader { border: 3px solid #f3f3f3; border-top: 3px solid #166534; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -55,7 +54,7 @@
         import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, writeBatch, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
-        // --- FIREBASE SETUP ---
+        // --- FIREBASE CONFIG ---
         const manualConfig = { apiKey: "AIzaSyBzPiBCgiHoHSp24U7739fj9-htyTA8KiU", authDomain: "app-jardin-v4.firebaseapp.com", projectId: "app-jardin-v4", storageBucket: "app-jardin-v4.firebasestorage.app", messagingSenderId: "413324369604", appId: "1:413324369604:web:f78e3f459725dd824e3391" };
         let firebaseConfig = manualConfig;
         try { if (typeof __firebase_config !== 'undefined' && __firebase_config) firebaseConfig = JSON.parse(__firebase_config); } catch(e) {}
@@ -64,22 +63,22 @@
         const auth = getAuth(app);
         const db = getFirestore(app);
         const storage = getStorage(app);
-        const APP_ID = 'jardin-os-v10'; // Nueva versión, nueva colección base
+        const APP_ID = 'jardin-os-v10'; 
 
-        // --- UTILS & SERVICES ---
+        // --- UTILS ---
         const formatTime = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...';
-        const formatDate = (ts) => ts ? new Date(ts.seconds * 1000).toLocaleDateString() : '';
 
-        // --- COMPONENTS ---
-
-        // 1. UI COMPONENTS
+        // --- UI COMPONENTS ---
         const Button = ({ onClick, children, variant = 'primary', className = '', icon, disabled }) => {
             const base = "px-4 py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2";
             const variants = {
                 primary: "bg-green-800 text-white shadow-lg hover:bg-green-900",
                 secondary: "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50",
                 danger: "bg-red-50 text-red-500 border border-red-100 hover:bg-red-100",
-                ghost: "bg-transparent text-slate-400 hover:text-slate-600"
+                ghost: "bg-transparent text-slate-400 hover:text-slate-600",
+                blue: "bg-blue-600 text-white shadow-lg hover:bg-blue-700",
+                purple: "bg-purple-600 text-white shadow-lg hover:bg-purple-700",
+                yellow: "bg-yellow-400 text-yellow-900 shadow hover:bg-yellow-500"
             };
             return (
                 <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}>
@@ -90,7 +89,7 @@
         };
 
         const Input = ({ label, ...props }) => (
-            <div className="mb-3">
+            <div className="mb-3 w-full">
                 {label && <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">{label}</label>}
                 <input {...props} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-green-500 transition-all font-medium text-slate-700 placeholder-slate-400" />
             </div>
@@ -101,11 +100,11 @@
             return (
                 <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
                     <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden slide-in max-h-[90vh] flex flex-col">
-                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 flex-none">
                             <h3 className="font-bold text-lg text-slate-800">{title}</h3>
                             <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-200 text-slate-500 hover:bg-red-100 hover:text-red-500 flex items-center justify-center transition-colors"><i className="fas fa-times"></i></button>
                         </div>
-                        <div className="p-5 overflow-y-auto">
+                        <div className="p-5 overflow-y-auto flex-grow">
                             {children}
                         </div>
                     </div>
@@ -113,9 +112,425 @@
             );
         };
 
-        // 2. FEATURE COMPONENTS
+        const EmptyState = ({ icon, text }) => (
+            <div className="flex flex-col items-center justify-center py-10 opacity-40 gap-3">
+                <i className={`fas fa-${icon} text-4xl`}></i>
+                <p className="font-medium">{text}</p>
+            </div>
+        );
 
-        // --- TASKS ---
+        // --- HELPER PARA ITEMS DINÁMICOS (Pedidos/Repartos) ---
+        const ItemsInput = ({ items, setItems }) => {
+            const add = () => setItems([...items, { item: '', amount: '' }]);
+            const remove = (idx) => setItems(items.filter((_, i) => i !== idx));
+            const update = (idx, field, val) => {
+                const copy = [...items];
+                copy[idx][field] = val;
+                setItems(copy);
+            };
+
+            return (
+                <div className="space-y-2 mb-4">
+                    <label className="block text-xs font-bold text-slate-400 uppercase ml-1">Items</label>
+                    {items.map((row, idx) => (
+                        <div key={idx} className="flex gap-2">
+                            <input placeholder="Producto" value={row.item} onChange={e => update(idx, 'item', e.target.value)} className="w-[70%] p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none" />
+                            <input placeholder="#" value={row.amount} onChange={e => update(idx, 'amount', e.target.value)} className="w-[20%] p-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none text-center" />
+                            <button onClick={() => remove(idx)} className="w-[10%] text-slate-400 hover:text-red-500"><i className="fas fa-times"></i></button>
+                        </div>
+                    ))}
+                    <button onClick={add} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-lg text-slate-400 font-bold text-sm hover:border-green-400 hover:text-green-500 transition-colors">+ Agregar Item</button>
+                </div>
+            );
+        };
+
+        // --- VISTAS DEL NEGOCIO ---
+
+        const DeliveriesView = ({ user, branch }) => {
+            const [list, setList] = React.useState([]);
+            const [modal, setModal] = React.useState(false);
+            const [form, setForm] = React.useState({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] });
+            const [editId, setEditId] = React.useState(null);
+
+            React.useEffect(() => {
+                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries'), orderBy('createdAt', 'desc'), limit(50));
+                return onSnapshot(q, snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+            }, []);
+
+            const save = async () => {
+                const validItems = form.items.filter(i => i.item.trim());
+                if(!form.client || validItems.length === 0) return alert("Faltan datos");
+                const payload = { ...form, items: validItems, updatedAt: serverTimestamp(), branchOrigin: branch };
+                
+                if (editId) await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', editId), payload);
+                else await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries'), { ...payload, status: 'pending', createdAt: serverTimestamp() });
+                
+                setModal(false); setEditId(null); setForm({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] });
+            };
+
+            const updateStatus = async (id, status) => await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id), { status });
+            const remove = async (id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'deliveries', id)); };
+            const edit = (d) => { setForm({...d, items: Array.isArray(d.items) ? d.items : [{item: d.items, amount: '1'}]}); setEditId(d.id); setModal(true); };
+
+            return (
+                <div className="pb-24 space-y-3">
+                    {list.length === 0 && <EmptyState icon="truck" text="Sin repartos pendientes" />}
+                    {list.map(d => {
+                        const isDone = d.status === 'delivered';
+                        const isIncomplete = d.status === 'incomplete';
+                        return (
+                            <div key={d.id} className={`bg-white rounded-xl shadow-sm border p-4 ${isDone ? 'opacity-50 border-slate-200' : isIncomplete ? 'border-orange-200 bg-orange-50' : 'border-slate-200'}`}>
+                                <div className="flex justify-between items-start mb-2">
+                                    <h3 className="font-bold text-slate-900 text-lg">{d.client}</h3>
+                                    <div className="text-right">
+                                        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${d.status === 'pending' ? 'bg-slate-100 text-slate-500' : d.status === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{d.status === 'pending' ? 'PENDIENTE' : d.status === 'delivered' ? 'ENTREGADO' : 'INCOMPLETO'}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center justify-between mb-3">
+                                    <a href={`tel:${d.phone}`} className="text-green-600 font-bold flex items-center gap-1 text-sm"><i className="fas fa-phone"></i> {d.phone}</a>
+                                    <div className="flex gap-2 text-xs text-slate-500">
+                                        <span><i className="far fa-clock"></i> {d.when}</span>
+                                        <span className="text-blue-500"><i className="fas fa-map-marker-alt"></i> {d.where}</span>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-50 rounded-lg p-2 text-sm text-slate-700 mb-3 border border-slate-100">
+                                    {Array.isArray(d.items) ? d.items.map((i,x) => <div key={x} className="flex justify-between border-b border-slate-200 last:border-0 py-1"><span>{i.item}</span><span className="font-bold">x{i.amount}</span></div>) : d.items}
+                                </div>
+                                {d.notes && <p className="text-xs bg-yellow-50 text-yellow-800 p-2 rounded mb-3 border border-yellow-100"><i className="fas fa-sticky-note mr-1"></i> {d.notes}</p>}
+                                <div className="flex justify-between items-center border-t border-slate-100 pt-3">
+                                    <div className="flex gap-2">
+                                        <button onClick={() => edit(d)} className="text-slate-400 hover:text-blue-500"><i className="fas fa-pencil-alt"></i></button>
+                                        <button onClick={() => remove(d.id)} className="text-slate-400 hover:text-red-500"><i className="fas fa-trash"></i></button>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        {d.status !== 'delivered' && <button onClick={() => updateStatus(d.id, 'delivered')} className="bg-green-100 text-green-700 px-3 py-1 rounded-lg text-xs font-bold">Entregado</button>}
+                                        {d.status !== 'incomplete' && <button onClick={() => updateStatus(d.id, 'incomplete')} className="bg-orange-100 text-orange-700 px-3 py-1 rounded-lg text-xs font-bold">Incomp.</button>}
+                                        {d.status !== 'pending' && <button onClick={() => updateStatus(d.id, 'pending')} className="bg-slate-100 text-slate-500 px-3 py-1 rounded-lg text-xs font-bold"><i className="fas fa-undo"></i></button>}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => { setEditId(null); setForm({ client: '', phone: '', where: '', when: '', notes: '', items: [{item: '', amount: '1'}] }); setModal(true); }} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-indigo-600" icon="fa-plus"></Button></div>
+                    
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title={editId ? "Editar Reparto" : "Nuevo Reparto"}>
+                        <Input placeholder="Cliente" value={form.client} onChange={e => setForm({...form, client: e.target.value})} />
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                            <Input placeholder="Teléfono" type="tel" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
+                            <Input placeholder="Horario" value={form.when} onChange={e => setForm({...form, when: e.target.value})} />
+                        </div>
+                        <Input placeholder="Dirección" value={form.where} onChange={e => setForm({...form, where: e.target.value})} />
+                        <ItemsInput items={form.items} setItems={(i) => setForm({...form, items: i})} />
+                        <Input placeholder="Notas (Timbre, etc)" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+                        <Button onClick={save} className="w-full" variant="blue">Guardar Reparto</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const OrdersView = ({ user, branch }) => {
+            const [list, setList] = React.useState([]);
+            const [modal, setModal] = React.useState(false);
+            const [form, setForm] = React.useState({ requester: user.displayName || '', notes: '', items: [{item: '', amount: ''}] });
+
+            React.useEffect(() => {
+                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), orderBy('createdAt', 'desc'), limit(50));
+                return onSnapshot(q, snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+            }, []);
+
+            const save = async () => {
+                const valid = form.items.filter(i => i.item.trim());
+                if(valid.length === 0) return alert("Agrega items");
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'orders'), { ...form, items: valid, status: 'pending', branch, createdAt: serverTimestamp() });
+                setModal(false); setForm({ requester: user.displayName || '', notes: '', items: [{item: '', amount: ''}] });
+            };
+
+            const advance = async (o) => {
+                const next = o.status === 'pending' ? 'ordered' : 'received';
+                await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', o.id), { status: next });
+            };
+
+            const deleteOrder = async(id) => { if(confirm("¿Borrar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'orders', id)); };
+
+            return (
+                <div className="pb-24 space-y-3">
+                    {list.length === 0 && <EmptyState icon="shopping-basket" text="Sin pedidos" />}
+                    {list.map(o => (
+                        <div key={o.id} className={`bg-white rounded-xl p-4 shadow-sm border border-slate-200 ${o.status === 'received' ? 'opacity-50 bg-slate-50' : ''}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold text-slate-400 uppercase">Pedido ({o.branch})</span>
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded ${o.status === 'received' ? 'bg-green-100 text-green-700' : o.status === 'ordered' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>{o.status === 'received' ? 'RECIBIDO' : o.status === 'ordered' ? 'COMPRADO' : 'PENDIENTE'}</span>
+                            </div>
+                            <div className="bg-slate-50 rounded-lg overflow-hidden my-2 border border-slate-100">
+                                {o.items.map((i,x) => <div key={x} className="flex justify-between p-2 border-b border-slate-100 last:border-0 text-sm"><span className="font-medium text-slate-700">{i.item}</span><span className="text-slate-500">x{i.amount}</span></div>)}
+                            </div>
+                            {o.notes && <p className="text-xs text-slate-500 italic mb-2"><i className="fas fa-comment-alt mr-1"></i>{o.notes}</p>}
+                            <div className="flex justify-between items-center text-xs text-slate-400 mt-2 border-t border-slate-100 pt-2">
+                                <span>Por: <strong>{o.requester}</strong></span>
+                                <div className="flex gap-2">
+                                    {o.status !== 'received' && <button onClick={() => advance(o)} className="text-blue-600 font-bold hover:underline">AVANZAR</button>}
+                                    <button onClick={() => deleteOrder(o.id)} className="text-red-400 hover:text-red-600"><i className="fas fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModal(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-blue-600" icon="fa-plus"></Button></div>
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title="Nuevo Pedido">
+                        <Input placeholder="Solicita" value={form.requester} onChange={e => setForm({...form, requester: e.target.value})} />
+                        <ItemsInput items={form.items} setItems={(i) => setForm({...form, items: i})} />
+                        <Input placeholder="Notas opcionales" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} />
+                        <Button onClick={save} className="w-full" variant="blue">Confirmar Pedido</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const StandardsView = ({ user }) => {
+            const [list, setList] = React.useState([]);
+            const [filter, setFilter] = React.useState('');
+            const [modal, setModal] = React.useState(false);
+            const [form, setForm] = React.useState({ species: '', sizeLabel: 'T1', height: '', diameter: '' });
+            const [file, setFile] = React.useState(null);
+            const [uploading, setUploading] = React.useState(false);
+
+            React.useEffect(() => {
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards')), snap => {
+                    const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                    // Group by Species
+                    const grouped = {};
+                    data.forEach(item => {
+                        const s = item.species.toLowerCase();
+                        if(!grouped[s]) grouped[s] = { name: item.species, variants: [] };
+                        grouped[s].variants.push(item);
+                    });
+                    setList(Object.values(grouped).sort((a,b) => a.name.localeCompare(b.name)));
+                });
+            }, []);
+
+            const save = async () => {
+                if(!form.species) return alert("Falta especie");
+                setUploading(true);
+                let photoUrl = '';
+                if(file) {
+                    try {
+                        const sRef = ref(storage, `standards/${Date.now()}_${file.name}`);
+                        const snap = await uploadBytes(sRef, file);
+                        photoUrl = await getDownloadURL(snap.ref);
+                    } catch(e) { console.error(e); alert("Error subiendo foto"); setUploading(false); return; }
+                }
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'standards'), { 
+                    ...form, 
+                    species: form.species.charAt(0).toUpperCase() + form.species.slice(1), 
+                    photoUrl, 
+                    author: user.displayName, 
+                    createdAt: serverTimestamp() 
+                });
+                setUploading(false); setModal(false); setFile(null); setForm({ species: '', sizeLabel: 'T1', height: '', diameter: '' });
+            };
+
+            const delItem = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'standards', id)); };
+
+            return (
+                <div className="pb-24">
+                    <div className="sticky top-0 bg-slate-100 z-10 pb-4 pt-2">
+                        <div className="relative">
+                            <i className="fas fa-search absolute left-4 top-3.5 text-slate-400"></i>
+                            <input type="text" placeholder="Buscar especie..." value={filter} onChange={e => setFilter(e.target.value)} className="w-full p-3 pl-10 rounded-xl border border-slate-300 shadow-sm outline-none focus:ring-2 focus:ring-green-500" />
+                        </div>
+                    </div>
+                    
+                    <div className="space-y-6">
+                        {list.filter(g => g.name.toLowerCase().includes(filter.toLowerCase())).map(group => (
+                            <StandardCard key={group.name} group={group} onDelete={delItem} />
+                        ))}
+                    </div>
+
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModal(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-slate-800" icon="fa-ruler-combined"></Button></div>
+
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title="Nuevo Estándar">
+                        <Input placeholder="Especie (ej: Jazmín)" value={form.species} onChange={e => setForm({...form, species: e.target.value})} />
+                        <div className="mb-3">
+                            <label className="text-xs font-bold text-slate-400 uppercase ml-1">Tamaño</label>
+                            <div className="flex gap-2 overflow-x-auto py-1">
+                                {['T1','T2','T3','T4','T5'].map(sz => (
+                                    <button key={sz} onClick={() => setForm({...form, sizeLabel: sz})} className={`px-4 py-2 rounded-lg font-bold transition ${form.sizeLabel === sz ? 'bg-green-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{sz}</button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <Input placeholder="Altura" value={form.height} onChange={e => setForm({...form, height: e.target.value})} />
+                            <Input placeholder="Tronco" value={form.diameter} onChange={e => setForm({...form, diameter: e.target.value})} />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block w-full p-4 border-2 border-dashed border-slate-300 rounded-xl text-center text-slate-400 cursor-pointer hover:bg-slate-50">
+                                <i className="fas fa-camera text-2xl mb-1 block"></i>
+                                {file ? file.name : "Subir Foto"}
+                                <input type="file" accept="image/*" className="hidden" onChange={e => setFile(e.target.files[0])} />
+                            </label>
+                        </div>
+                        <Button onClick={save} className="w-full" disabled={uploading}>{uploading ? 'Subiendo...' : 'Guardar'}</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const StandardCard = ({ group, onDelete }) => {
+            const [selected, setSelected] = React.useState(group.variants[0]);
+            
+            // Re-select if variants change
+            React.useEffect(() => {
+                if(!group.variants.find(v => v.id === selected.id)) setSelected(group.variants[0]);
+            }, [group.variants]);
+
+            // Sort variants T1 < T2...
+            const variants = group.variants.sort((a,b) => a.sizeLabel.localeCompare(b.sizeLabel));
+
+            return (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <h3 className="font-bold text-slate-800 capitalize text-lg">{group.name}</h3>
+                        <div className="flex gap-2 overflow-x-auto hide-scrollbar">
+                            {variants.map(v => (
+                                <button key={v.id} onClick={() => setSelected(v)} className={`px-3 py-1 rounded-lg text-sm font-bold transition-colors ${selected.id === v.id ? 'bg-green-600 text-white shadow' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'}`}>{v.sizeLabel}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="relative">
+                        <img src={selected.photoUrl || 'https://placehold.co/600x400/e2e8f0/94a3b8?text=Sin+Foto'} className="w-full h-64 object-cover" />
+                        <div className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4 pt-12 text-white">
+                            <div className="flex justify-between items-end">
+                                <div>
+                                    <p className="font-bold text-lg"><i className="fas fa-arrows-alt-v opacity-70 w-5"></i> {selected.height}</p>
+                                    <p className="font-bold text-lg"><i className="fas fa-circle-notch opacity-70 w-5"></i> {selected.diameter}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs opacity-70">Definido por</p>
+                                    <p className="font-bold text-sm">{selected.author || 'Anon'}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => onDelete(selected.id)} className="absolute top-2 right-2 bg-white/20 hover:bg-red-500 hover:text-white text-white p-2 rounded-full backdrop-blur-sm transition"><i className="fas fa-trash"></i></button>
+                    </div>
+                </div>
+            );
+        };
+
+        const NotesView = ({ branch }) => {
+            const [notes, setNotes] = React.useState([]);
+            const [modal, setModal] = React.useState(false);
+            const [content, setContent] = React.useState('');
+            const [type, setType] = React.useState('normal');
+
+            React.useEffect(() => {
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), where('branch', '==', branch)), snap => {
+                    setNotes(snap.docs.map(d => ({id: d.id, ...d.data()})));
+                });
+            }, [branch]);
+
+            const save = async () => {
+                if(!content.trim()) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'notes'), { content, type, branch, createdAt: serverTimestamp() });
+                setModal(false); setContent('');
+            };
+            const remove = async(id) => await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'notes', id));
+
+            return (
+                <div className="pb-24 grid gap-4">
+                    {notes.map(n => (
+                        <div key={n.id} className={`p-4 rounded-xl shadow-sm border relative ${n.type === 'billing' ? 'bg-amber-50 border-amber-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                            {n.type === 'billing' && <span className="absolute -top-2 left-4 bg-amber-500 text-white text-[10px] px-2 rounded font-bold">COBRAR</span>}
+                            <p className="whitespace-pre-wrap text-slate-800 leading-relaxed font-sans pr-6">{n.content}</p>
+                            <button onClick={() => remove(n.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500"><i className="fas fa-trash-alt"></i></button>
+                        </div>
+                    ))}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModal(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-yellow-400 text-yellow-900" icon="fa-plus"></Button></div>
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title="Nueva Nota">
+                        <select value={type} onChange={e => setType(e.target.value)} className="w-full p-2 mb-4 bg-yellow-100 border-none rounded text-yellow-900 font-bold"><option value="normal">General</option><option value="billing">Cobranza $$</option></select>
+                        <textarea rows="6" className="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 outline-none" placeholder="Escribe aquí..." value={content} onChange={e => setContent(e.target.value)}></textarea>
+                        <Button onClick={save} className="w-full mt-4" variant="yellow">Pegar Nota</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const ProceduresView = () => {
+            const [list, setList] = React.useState([]);
+            const [modal, setModal] = React.useState(false);
+            const [form, setForm] = React.useState({ title: '', steps: '', color: 'blue' });
+
+            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures')), snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()})))), []);
+
+            const save = async () => {
+                if(!form.title) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'procedures'), { ...form, createdAt: serverTimestamp() });
+                setModal(false); setForm({ title: '', steps: '', color: 'blue' });
+            };
+            const remove = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'procedures', id)); };
+
+            const colors = { blue: 'bg-blue-50 border-blue-200 text-blue-900', green: 'bg-emerald-50 border-emerald-200 text-emerald-900', red: 'bg-red-50 border-red-200 text-red-900', purple: 'bg-purple-50 border-purple-200 text-purple-900' };
+
+            return (
+                <div className="pb-24 space-y-4">
+                    {list.map(p => (
+                        <div key={p.id} className={`rounded-xl shadow-sm border p-5 relative ${colors[p.color] || colors.blue}`}>
+                            <h3 className="font-bold text-lg mb-3 flex items-center gap-2"><i className="fas fa-clipboard-check opacity-50"></i> {p.title}</h3>
+                            <ul className="text-sm opacity-90 leading-relaxed space-y-1">
+                                {p.steps.split('\n').map((s, i) => <li key={i} className="flex gap-2"><span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current opacity-50 flex-shrink-0"></span><span>{s.replace(/^- /, '')}</span></li>)}
+                            </ul>
+                            <button onClick={() => remove(p.id)} className="absolute top-4 right-4 opacity-30 hover:opacity-100 hover:text-red-600"><i className="fas fa-trash"></i></button>
+                        </div>
+                    ))}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModal(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-slate-700" icon="fa-plus"></Button></div>
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title="Nuevo Protocolo">
+                        <Input placeholder="Título" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+                        <textarea rows="5" className="w-full p-3 mb-4 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm" placeholder="- Paso 1&#10;- Paso 2..." value={form.steps} onChange={e => setForm({...form, steps: e.target.value})}></textarea>
+                        <div className="flex gap-2 mb-4">
+                            {['blue','green','red','purple'].map(c => <button key={c} onClick={() => setForm({...form, color: c})} className={`w-8 h-8 rounded-full bg-${c}-500 ${form.color === c ? 'ring-2 ring-offset-2 ring-slate-400' : ''}`}></button>)}
+                        </div>
+                        <Button onClick={save} className="w-full">Guardar</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const ScriptsView = () => {
+            const [list, setList] = React.useState([]);
+            const [modal, setModal] = React.useState(false);
+            const [form, setForm] = React.useState({ title: '', content: '' });
+
+            React.useEffect(() => onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts')), snap => setList(snap.docs.map(d => ({id: d.id, ...d.data()})))), []);
+
+            const save = async () => {
+                if(!form.title) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'scripts'), { ...form, createdAt: serverTimestamp() });
+                setModal(false); setForm({ title: '', content: '' });
+            };
+            const copy = (txt) => { navigator.clipboard.writeText(txt); alert("Copiado!"); };
+            const remove = async(id) => { if(confirm("¿Eliminar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'scripts', id)); };
+
+            return (
+                <div className="pb-24 space-y-4">
+                    {list.map(s => (
+                        <div key={s.id} className="bg-white rounded-xl shadow-sm border border-purple-100 p-4">
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-bold text-slate-800 text-lg">{s.title}</h3>
+                                <button onClick={() => remove(s.id)} className="text-slate-300 hover:text-red-400"><i className="fas fa-trash"></i></button>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-lg text-sm text-slate-600 mb-3 font-mono leading-relaxed border border-slate-100">{s.content}</div>
+                            <Button onClick={() => copy(s.content)} variant="secondary" className="w-full text-purple-700 bg-purple-50 hover:bg-purple-100 border-transparent" icon="fa-copy">Copiar</Button>
+                        </div>
+                    ))}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModal(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-purple-600" icon="fa-plus"></Button></div>
+                    <Modal isOpen={modal} onClose={() => setModal(false)} title="Nuevo Guion">
+                        <Input placeholder="Título" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+                        <textarea rows="6" className="w-full p-3 mb-4 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm" placeholder="Texto del script..." value={form.content} onChange={e => setForm({...form, content: e.target.value})}></textarea>
+                        <Button onClick={save} className="w-full" variant="purple">Guardar</Button>
+                    </Modal>
+                </div>
+            );
+        };
+
+        // --- COMPONENTS FROM V10 (Tasks, Stock, Chat) reused here ---
         const TasksView = ({ user, branch }) => {
             const [tasks, setTasks] = React.useState([]);
             const [loading, setLoading] = React.useState(true);
@@ -124,236 +539,122 @@
 
             React.useEffect(() => {
                 const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), orderBy('createdAt', 'desc'));
-                const unsub = onSnapshot(q, (snap) => {
-                    const data = snap.docs
-                        .map(d => ({id: d.id, ...d.data()}))
-                        .filter(t => t.branch === branch); // Filter client-side for simplicity in v10
-                    setTasks(data);
-                    setLoading(false);
+                return onSnapshot(q, (snap) => {
+                    const data = snap.docs.map(d => ({id: d.id, ...d.data()})).filter(t => t.branch === branch);
+                    setTasks(data); setLoading(false);
                 });
-                return () => unsub();
             }, [branch]);
 
             const handleAdd = async () => {
                 if (!newTask.text.trim()) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), {
-                    ...newTask, branch, status: 'pending', createdAt: serverTimestamp()
-                });
-                setModalOpen(false);
-                setNewTask({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'tasks'), { ...newTask, branch, status: 'pending', createdAt: serverTimestamp() });
+                setModalOpen(false); setNewTask({ text: '', priority: 'medium', assignee: user.displayName || 'Equipo' });
             };
+            const toggle = async (t) => await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', t.id), { status: t.status === 'pending' ? 'done' : 'pending' });
+            const del = async (id) => { if(confirm("¿Borrar?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', id)); };
 
-            const toggleStatus = async (task) => {
-                const nextStatus = task.status === 'pending' ? 'done' : 'pending';
-                await updateDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', task.id), { status: nextStatus });
-            };
-
-            const deleteTask = async (id) => {
-                if(confirm("¿Borrar tarea?")) await deleteDoc(doc(db, 'artifacts', APP_ID, 'public', 'data', 'tasks', id));
-            }
-
-            const priorityColors = { critical: 'border-red-500', high: 'border-orange-500', medium: 'border-blue-500', low: 'border-green-500' };
+            const prio = { critical: 'border-red-500', high: 'border-orange-500', medium: 'border-blue-500', low: 'border-green-500' };
 
             return (
-                <div className="pb-24">
+                <div className="pb-24 space-y-3">
                     {loading && <div className="flex justify-center p-8"><div className="loader"></div></div>}
-                    {!loading && tasks.length === 0 && (
-                        <div className="text-center p-10 opacity-50">
-                            <i className="fas fa-clipboard-check text-4xl mb-3"></i>
-                            <p>Todo limpio por hoy</p>
-                        </div>
-                    )}
-                    <div className="space-y-3">
-                        {tasks.map(t => (
-                            <div key={t.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${priorityColors[t.priority]} flex gap-3 transition-opacity ${t.status === 'done' ? 'opacity-50' : ''}`}>
-                                <div className="flex-grow">
-                                    <div className="flex justify-between items-start">
-                                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">{t.priority}</span>
-                                        <button onClick={() => deleteTask(t.id)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
-                                    </div>
-                                    <h3 className={`font-medium text-slate-800 ${t.status === 'done' ? 'line-through' : ''}`}>{t.text}</h3>
-                                    <p className="text-xs text-slate-400 mt-1"><i className="fas fa-user-circle mr-1"></i> {t.assignee}</p>
+                    {!loading && tasks.length === 0 && <EmptyState icon="clipboard-check" text="Todo limpio" />}
+                    {tasks.map(t => (
+                        <div key={t.id} className={`bg-white p-4 rounded-xl shadow-sm border-l-4 ${prio[t.priority]} flex gap-3 transition-opacity ${t.status === 'done' ? 'opacity-50' : ''}`}>
+                            <div className="flex-grow">
+                                <div className="flex justify-between items-start">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider mb-1">{t.priority}</span>
+                                    <button onClick={() => del(t.id)} className="text-slate-300 hover:text-red-500"><i className="fas fa-trash"></i></button>
                                 </div>
-                                <button onClick={() => toggleStatus(t)} className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all active:scale-90 ${t.status === 'done' ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-300'}`}>
-                                    <i className="fas fa-check"></i>
-                                </button>
+                                <h3 className={`font-medium text-slate-800 ${t.status === 'done' ? 'line-through' : ''}`}>{t.text}</h3>
+                                <p className="text-xs text-slate-400 mt-1"><i className="fas fa-user-circle mr-1"></i> {t.assignee}</p>
                             </div>
-                        ))}
-                    </div>
-
-                    <div className="fixed bottom-6 right-6">
-                        <Button onClick={() => setModalOpen(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-green-700" icon="fa-plus"></Button>
-                    </div>
-
+                            <button onClick={() => toggle(t)} className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm transition-all active:scale-90 ${t.status === 'done' ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-300'}`}><i className="fas fa-check"></i></button>
+                        </div>
+                    ))}
+                    <div className="fixed bottom-6 right-6"><Button onClick={() => setModalOpen(true)} className="w-14 h-14 rounded-full !p-0 shadow-xl bg-green-700" icon="fa-plus"></Button></div>
                     <Modal isOpen={isModalOpen} onClose={() => setModalOpen(false)} title="Nueva Tarea">
                         <Input placeholder="Descripción..." value={newTask.text} onChange={e => setNewTask({...newTask, text: e.target.value})} autoFocus />
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                            <Input placeholder="Responsable" value={newTask.assignee} onChange={e => setNewTask({...newTask, assignee: e.target.value})} />
-                            <div className="mb-3">
-                                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Prioridad</label>
-                                <select value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-600">
-                                    <option value="low">Baja</option>
-                                    <option value="medium">Normal</option>
-                                    <option value="high">Alta</option>
-                                    <option value="critical">URGENTE</option>
-                                </select>
-                            </div>
-                        </div>
+                        <Input placeholder="Responsable" value={newTask.assignee} onChange={e => setNewTask({...newTask, assignee: e.target.value})} />
+                        <select value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})} className="w-full p-3 mb-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-600"><option value="low">Baja</option><option value="medium">Normal</option><option value="high">Alta</option><option value="critical">URGENTE</option></select>
                         <Button onClick={handleAdd} className="w-full">Guardar Tarea</Button>
                     </Modal>
                 </div>
             );
         };
 
-        // --- STOCK (Mejorado con PapaParse y filtrado en memoria) ---
         const StockView = () => {
             const [items, setItems] = React.useState([]);
             const [filter, setFilter] = React.useState('');
-            const [loading, setLoading] = React.useState(true);
-            const fileInputRef = React.useRef(null);
+            const fileRef = React.useRef(null);
 
             React.useEffect(() => {
-                // Solo traemos los nombres y IDs para ser ligeros
-                const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock'));
-                const unsub = onSnapshot(q, (snap) => {
-                    const list = snap.docs.map(d => ({id: d.id, name: d.data().name}));
-                    setItems(list.sort((a,b) => a.name.localeCompare(b.name)));
-                    setLoading(false);
+                return onSnapshot(query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock')), snap => {
+                    setItems(snap.docs.map(d => ({id: d.id, name: d.data().name})).sort((a,b) => a.name.localeCompare(b.name)));
                 });
-                return () => unsub();
             }, []);
 
-            // Filtrado eficiente con useMemo
-            const filteredItems = React.useMemo(() => {
-                if (!filter) return items.slice(0, 50); // Mostrar solo primeros 50 si no hay filtro
-                const lower = filter.toLowerCase();
-                return items.filter(i => i.name.toLowerCase().includes(lower)).slice(0, 50); // Límite duro de renderizado
+            const filtered = React.useMemo(() => {
+                if (!filter) return items.slice(0, 50);
+                return items.filter(i => i.name.toLowerCase().includes(filter.toLowerCase())).slice(0, 50);
             }, [items, filter]);
 
             const handleImport = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                Papa.parse(file, {
+                if (!e.target.files[0]) return;
+                Papa.parse(e.target.files[0], {
                     complete: async (results) => {
-                        if (results.data && results.data.length > 0) {
-                            if(!confirm(`Se encontraron ${results.data.length} filas. ¿Importar?`)) return;
-                            setLoading(true);
-                            
-                            // Detectar columna de descripción (asumimos la que tiene más texto o índice 1)
-                            const batchSize = 400;
-                            const chunks = [];
-                            let currentChunk = writeBatch(db);
-                            let count = 0;
-                            
-                            // Limpiar colección anterior (opcional, pero recomendado para resets)
-                            // En v10 solo agregamos por simplicidad
-                            
+                        if (results.data.length > 0 && confirm(`Importar ${results.data.length} items?`)) {
+                            const batchSize = 400; let chunks = [], chunk = writeBatch(db), count = 0;
                             results.data.forEach((row, idx) => {
-                                if (idx === 0) return; // Skip header
-                                // Lógica simple: Tomar la celda más larga o la segunda columna
-                                const name = row[1] || row[0]; 
-                                if (name && typeof name === 'string' && name.length > 2) {
-                                    const ref = doc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock'));
-                                    currentChunk.set(ref, { name: name.trim(), createdAt: serverTimestamp() });
+                                if (idx === 0) return;
+                                const name = row[1] || row[0];
+                                if (name && name.length > 2) {
+                                    chunk.set(doc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'stock')), { name: name.trim(), createdAt: serverTimestamp() });
                                     count++;
-                                    if (count % batchSize === 0) {
-                                        chunks.push(currentChunk);
-                                        currentChunk = writeBatch(db);
-                                    }
+                                    if (count % batchSize === 0) { chunks.push(chunk); chunk = writeBatch(db); }
                                 }
                             });
-                            chunks.push(currentChunk);
-                            
+                            chunks.push(chunk);
                             await Promise.all(chunks.map(b => b.commit()));
-                            alert("Importación completada");
-                            setLoading(false);
+                            alert("Importado!");
                         }
-                    },
-                    header: false
+                    }, header: false
                 });
-            };
-
-            const clearStock = async () => {
-                 if(!confirm("PELIGRO: Esto borrará todo el inventario. ¿Seguro?")) return;
-                 // Nota: Borrar una colección entera desde cliente es costoso. 
-                 // Aquí solo mostramos la intención. En producción usar Cloud Functions.
-                 alert("Función deshabilitada por seguridad en esta demo. Usa la consola de Firebase.");
             };
 
             return (
                 <div className="pb-24">
-                    <div className="sticky top-0 bg-slate-100 z-10 pb-4 pt-2">
+                     <div className="sticky top-0 bg-slate-100 z-10 pb-4 pt-2">
                         <div className="relative">
                             <i className="fas fa-search absolute left-4 top-3.5 text-slate-400"></i>
-                            <input 
-                                type="text" 
-                                placeholder="Buscar en inventario..." 
-                                className="w-full p-3 pl-10 rounded-xl border border-slate-300 shadow-sm outline-none focus:ring-2 focus:ring-green-500"
-                                value={filter}
-                                onChange={e => setFilter(e.target.value)}
-                            />
+                            <input type="text" placeholder="Buscar..." className="w-full p-3 pl-10 rounded-xl border border-slate-300 shadow-sm outline-none focus:ring-2 focus:ring-green-500" value={filter} onChange={e => setFilter(e.target.value)} />
                         </div>
                     </div>
-
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden divide-y divide-slate-100">
-                        {loading && <div className="p-4 text-center text-slate-400">Cargando...</div>}
-                        {!loading && filteredItems.length === 0 && <div className="p-8 text-center text-slate-400">Sin resultados</div>}
-                        {filteredItems.map(item => (
-                            <div key={item.id} className="p-3 text-sm text-slate-700 hover:bg-slate-50">
-                                {item.name}
-                            </div>
-                        ))}
-                        {!filter && items.length > 50 && (
-                            <div className="p-3 text-center text-xs text-slate-400 bg-slate-50 italic">
-                                ... y {items.length - 50} productos más. Usa el buscador.
-                            </div>
-                        )}
+                        {filtered.length === 0 && <div className="p-8 text-center text-slate-400">Sin resultados</div>}
+                        {filtered.map(item => <div key={item.id} className="p-3 text-sm text-slate-700 hover:bg-slate-50">{item.name}</div>)}
                     </div>
-
-                    <div className="mt-8 space-y-3">
-                        <input type="file" ref={fileInputRef} accept=".csv" className="hidden" onChange={handleImport} />
-                        <Button variant="secondary" className="w-full" onClick={() => fileInputRef.current.click()} icon="fa-file-csv">
-                            Importar CSV (Sobreescribir)
-                        </Button>
-                        <Button variant="ghost" className="w-full text-red-400" onClick={clearStock} icon="fa-trash">
-                            Borrar Inventario
-                        </Button>
-                    </div>
+                    <div className="mt-4"><input type="file" ref={fileRef} accept=".csv" className="hidden" onChange={handleImport} /><Button variant="secondary" className="w-full" onClick={() => fileRef.current.click()} icon="fa-file-csv">Importar CSV</Button></div>
                 </div>
             );
         };
 
-        // --- CHAT (Radio) ---
         const ChatView = ({ user, branch }) => {
             const [msgs, setMsgs] = React.useState([]);
             const [text, setText] = React.useState('');
             const dummy = React.useRef();
-
             React.useEffect(() => {
                 const q = query(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), orderBy('createdAt', 'asc'), limit(100));
-                const unsub = onSnapshot(q, (snap) => {
-                    const data = snap.docs.map(d => ({id: d.id, ...d.data()}));
-                    setMsgs(data);
+                return onSnapshot(q, snap => {
+                    setMsgs(snap.docs.map(d => ({id: d.id, ...d.data()})));
                     setTimeout(() => dummy.current?.scrollIntoView({ behavior: 'smooth' }), 100);
                 });
-                return () => unsub();
             }, []);
-
             const send = async (e) => {
-                e.preventDefault();
-                if (!text.trim()) return;
-                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), {
-                    text,
-                    senderId: user.uid,
-                    senderName: user.displayName || 'Anon',
-                    branch,
-                    type: 'text',
-                    createdAt: serverTimestamp()
-                });
+                e.preventDefault(); if (!text.trim()) return;
+                await addDoc(collection(db, 'artifacts', APP_ID, 'public', 'data', 'chat'), { text, senderId: user.uid, senderName: user.displayName||'Anon', branch, type: 'text', createdAt: serverTimestamp() });
                 setText('');
             };
-
             return (
                 <div className="flex flex-col h-[calc(100vh-140px)]">
                     <div className="flex-grow overflow-y-auto p-4 space-y-3">
@@ -371,116 +672,71 @@
                         })}
                         <div ref={dummy}></div>
                     </div>
-                    <form onSubmit={send} className="p-3 bg-white border-t border-slate-200 flex gap-2">
-                        <input className="flex-grow bg-slate-100 rounded-full px-4 py-2 outline-none" value={text} onChange={e => setText(e.target.value)} placeholder="Mensaje..." />
-                        <button type="submit" className="w-10 h-10 rounded-full bg-green-600 text-white shadow-md active:scale-95"><i className="fas fa-paper-plane"></i></button>
-                    </form>
+                    <form onSubmit={send} className="p-3 bg-white border-t border-slate-200 flex gap-2"><input className="flex-grow bg-slate-100 rounded-full px-4 py-2 outline-none" value={text} onChange={e => setText(e.target.value)} placeholder="Mensaje..." /><button type="submit" className="w-10 h-10 rounded-full bg-green-600 text-white shadow-md active:scale-95"><i className="fas fa-paper-plane"></i></button></form>
                 </div>
             );
         };
 
-        // --- APP SHELL (Main Logic) ---
+        // --- APP SHELL ---
         const App = () => {
             const [user, setUser] = React.useState(null);
             const [view, setView] = React.useState('tasks');
             const [branch, setBranch] = React.useState(localStorage.getItem('tao_branch') || 'centro');
             const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
-            React.useEffect(() => {
-                const unsub = onAuthStateChanged(auth, (u) => setUser(u));
-                return () => unsub();
-            }, []);
+            React.useEffect(() => onAuthStateChanged(auth, u => setUser(u)), []);
+            const login = async () => { try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch(e) { await signInAnonymously(auth); } };
+            const toggleBranch = () => { const next = branch === 'centro' ? 'ejemplares' : 'centro'; setBranch(next); localStorage.setItem('tao_branch', next); setSidebarOpen(false); };
 
-            const login = async () => {
-                try {
-                    await signInWithPopup(auth, new GoogleAuthProvider());
-                } catch (e) {
-                    console.error(e);
-                    // Fallback para demo
-                    await signInAnonymously(auth);
-                }
-            };
-
-            const toggleBranch = () => {
-                const next = branch === 'centro' ? 'ejemplares' : 'centro';
-                setBranch(next);
-                localStorage.setItem('tao_branch', next);
-                setSidebarOpen(false);
-            };
-
-            if (!user) {
-                return (
-                    <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white">
-                        <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 text-3xl animate-pulse">
-                            <i className="fas fa-seedling"></i>
-                        </div>
-                        <h1 className="text-3xl font-bold mb-2">Jardín OS v10</h1>
-                        <p className="text-slate-400 mb-8 text-center max-w-xs">Sistema Integral de Gestión de Vivero. Versión React.</p>
-                        <Button onClick={login} className="w-full max-w-xs bg-white text-slate-900 hover:bg-slate-100">
-                            <i className="fab fa-google text-red-500"></i> Acceder con Google
-                        </Button>
-                        <p className="mt-4 text-xs text-slate-600">Al continuar aceptas el uso del servicio interno.</p>
-                    </div>
-                );
-            }
+            if (!user) return <div className="h-screen flex flex-col items-center justify-center p-6 bg-slate-900 text-white"><div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mb-6 text-3xl animate-pulse"><i className="fas fa-seedling"></i></div><h1 className="text-3xl font-bold mb-2">Jardín OS v10.5</h1><Button onClick={login} className="w-full max-w-xs bg-white text-slate-900 hover:bg-slate-100"><i className="fab fa-google text-red-500"></i> Acceder</Button></div>;
 
             const NavItem = ({ id, icon, label, badge }) => (
                 <button onClick={() => { setView(id); setSidebarOpen(false); }} className={`w-full text-left px-6 py-3 flex items-center gap-4 font-medium transition-colors ${view === id ? 'bg-green-50 text-green-800 border-l-4 border-green-600' : 'text-slate-600 hover:bg-slate-50 border-l-4 border-transparent'}`}>
-                    <i className={`fas ${icon} w-5 ${view === id ? 'text-green-600' : 'text-slate-400'}`}></i>
-                    {label}
+                    <i className={`fas ${icon} w-5 ${view === id ? 'text-green-600' : 'text-slate-400'}`}></i> {label}
                     {badge && <span className="ml-auto bg-red-500 text-white text-[10px] px-1.5 rounded-full">{badge}</span>}
                 </button>
             );
 
+            const titles = { tasks: 'Tareas', orders: 'Pedidos', delivery: 'Repartos', stock: 'Inventario', standards: 'Catálogo', notes: 'Notas', procedures: 'Protocolos', scripts: 'Guiones', chat: 'Radio' };
+
             return (
                 <div className="h-[100dvh] flex flex-col overflow-hidden bg-slate-100 text-slate-800 font-sans">
-                    
-                    {/* Header */}
                     <header className={`h-16 flex items-center justify-between px-4 text-white shadow-md z-20 transition-colors duration-500 ${branch === 'centro' ? 'bg-green-800' : 'bg-indigo-900'}`}>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setSidebarOpen(true)}><i className="fas fa-bars text-xl"></i></button>
-                            <h1 className="font-bold text-lg capitalize">{view === 'stock' ? 'Inventario' : view === 'chat' ? 'Radio Frecuencia' : 'Mis Tareas'}</h1>
-                        </div>
-                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs border border-white/30">
-                            {user.photoURL ? <img src={user.photoURL} className="w-full h-full rounded-full" /> : (user.displayName?.[0] || 'U')}
-                        </div>
+                        <div className="flex items-center gap-3"><button onClick={() => setSidebarOpen(true)}><i className="fas fa-bars text-xl"></i></button><h1 className="font-bold text-lg capitalize">{titles[view]}</h1></div>
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs border border-white/30">{user.photoURL ? <img src={user.photoURL} className="w-full h-full rounded-full" /> : (user.displayName?.[0] || 'U')}</div>
                     </header>
 
-                    {/* Sidebar */}
                     {sidebarOpen && <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)}></div>}
                     <aside className={`fixed top-0 left-0 h-full w-72 bg-white z-50 shadow-2xl transition-transform duration-300 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
                         <div className={`p-6 text-white ${branch === 'centro' ? 'bg-green-800' : 'bg-indigo-900'}`}>
-                            <div className="flex items-center gap-3 mb-4">
-                                <i className="fas fa-seedling text-2xl"></i>
-                                <div>
-                                    <h2 className="font-bold text-lg leading-none">Jardín OS</h2>
-                                    <span className="text-xs opacity-70">v10.0 React Native-Like</span>
-                                </div>
-                            </div>
-                            <button onClick={toggleBranch} className="w-full bg-black/20 p-2 rounded-lg flex items-center justify-between hover:bg-black/30 text-sm font-bold border border-white/10">
-                                <span>{branch === 'centro' ? 'Centro Tao' : 'Ejemplares Tao'}</span>
-                                <i className="fas fa-exchange-alt opacity-70"></i>
-                            </button>
+                            <div className="flex items-center gap-3 mb-4"><i className="fas fa-seedling text-2xl"></i><div><h2 className="font-bold text-lg leading-none">Jardín OS</h2><span className="text-xs opacity-70">v10.5 Completa</span></div></div>
+                            <button onClick={toggleBranch} className="w-full bg-black/20 p-2 rounded-lg flex items-center justify-between hover:bg-black/30 text-sm font-bold border border-white/10"><span>{branch === 'centro' ? 'Centro Tao' : 'Ejemplares Tao'}</span><i className="fas fa-exchange-alt opacity-70"></i></button>
                         </div>
                         <nav className="flex-grow py-4 overflow-y-auto">
                             <NavItem id="tasks" icon="fa-tasks" label="Tareas" />
-                            <NavItem id="stock" icon="fa-boxes" label="Stock & CSV" />
-                            <NavItem id="chat" icon="fa-walkie-talkie" label="Radio Chat" />
+                            <NavItem id="orders" icon="fa-shopping-basket" label="Pedidos" />
+                            <NavItem id="delivery" icon="fa-truck" label="Repartos" />
+                            <NavItem id="standards" icon="fa-ruler-combined" label="Catálogo" />
+                            <NavItem id="stock" icon="fa-boxes" label="Inventario" />
+                            <NavItem id="procedures" icon="fa-clipboard-check" label="Protocolos" />
+                            <NavItem id="scripts" icon="fa-comment-dots" label="Guiones" />
+                            <NavItem id="notes" icon="fa-sticky-note" label="Notas" />
+                            <NavItem id="chat" icon="fa-walkie-talkie" label="Radio" />
                         </nav>
-                        <div className="p-4 border-t border-slate-100">
-                             <button onClick={() => signOut(auth)} className="w-full py-2 text-slate-500 text-sm font-bold hover:text-red-500 flex items-center justify-center gap-2">
-                                <i className="fas fa-sign-out-alt"></i> Cerrar Sesión
-                            </button>
-                        </div>
+                        <div className="p-4 border-t border-slate-100"><button onClick={() => signOut(auth)} className="w-full py-2 text-slate-500 text-sm font-bold hover:text-red-500 flex items-center justify-center gap-2"><i className="fas fa-sign-out-alt"></i> Cerrar Sesión</button></div>
                     </aside>
 
-                    {/* Main Content */}
                     <main className="flex-grow overflow-y-auto p-4 relative">
                         {view === 'tasks' && <TasksView user={user} branch={branch} />}
+                        {view === 'orders' && <OrdersView user={user} branch={branch} />}
+                        {view === 'delivery' && <DeliveriesView user={user} branch={branch} />}
+                        {view === 'standards' && <StandardsView user={user} />}
                         {view === 'stock' && <StockView />}
+                        {view === 'procedures' && <ProceduresView />}
+                        {view === 'scripts' && <ScriptsView />}
+                        {view === 'notes' && <NotesView branch={branch} />}
                         {view === 'chat' && <ChatView user={user} branch={branch} />}
                     </main>
-
                 </div>
             );
         };
